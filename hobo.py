@@ -11,12 +11,19 @@ public domain within the United States.
 2016-02-24  David A. Riggs, Physical Science Tech, Lava Beds National Monument
 """
 
+from __future__ import print_function
+
 import sys
 import re
 import csv
 from datetime import datetime, timedelta, tzinfo
-from StringIO import StringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
+
+__version__ = '0.0.1'
 
 __all__ = 'HoboCSVReader',
 
@@ -69,7 +76,7 @@ def timestamp(s, tz=None):
         try:
             dt = datetime.strptime(s, fmt)
             return dt.replace(tzinfo=tz) if tz else dt
-        except ValueError, e:
+        except ValueError as e:
             pass
     raise ValueError('time data "%s" does not match formats: %s' % (s, ', '.join(TIME_FMTS)))
 
@@ -101,8 +108,7 @@ class HoboCSVReader(object):
         header = next(self._f)  # line 2: headers
         try:
             self.sn = SN_REGEX.findall(header)[0]
-        except Exception, e:
-            #print >> sys.stderr, e  # DEBUG
+        except Exception as e:
             self.sn = ''
         self._find_columns(header)
         
@@ -110,23 +116,23 @@ class HoboCSVReader(object):
         self.as_timezone = TZFixedOffset(as_timezone) if type(as_timezone) in (int, float, str) else as_timezone
         
         if 'Temp' not in header:
-            raise IllegalArgumentException('File %s does not contain Temperature data.' % fname)
+            raise ValueError('File %s does not contain Temperature data.' % fname)
 
         self.reader = csv.reader(self._f, strict=strict)
 
     def _find_columns(self, header):
         """Return integer index for (timestamp, temp, RH, battery)"""
-        self.itimestamp, self.itemp, self.irh, self.ibatt = None, None, None, None
-        headers = csv.reader(StringIO(header)).next()
+        self._itimestamp, self._itemp, self._irh, self._ibatt = None, None, None, None
+        headers = next(csv.reader(StringIO(header)))
         for i, header in enumerate(headers):
             if 'Date Time' in header:
-                self.itimestamp = i
+                self._itimestamp = i
             elif 'Temp,' in header or 'High Res. Temp.' in header:
-                self.itemp = i
+                self._itemp = i
             elif 'RH, %' in header:
-                self.irh = i
+                self._irh = i
             elif 'Batt, V' in header:
-                self.ibatt = i
+                self._ibatt = i
 
     def __iter__(self):
         """
@@ -136,17 +142,16 @@ class HoboCSVReader(object):
         :rtype: tuple(datetime, float, float, float)
         """
         for row in self.reader:
-            if not row[self.itemp]:  # is this too lenient?
+            if not row[self._itemp]:  # is this too lenient?
                 continue  # skip event-only rows
             if not row[0].strip():
                 continue  # skip blank rows
-            #i = int(row[0])
-            ts = timestamp(row[self.itimestamp], self.tz)
+            ts = timestamp(row[self._itimestamp], self.tz)
             if self.as_timezone:
                 ts = ts.astimezone(self.as_timezone)
-            temp = float(row[self.itemp])
-            rh = float(row[self.irh]) if self.irh is not None and row[self.irh] else None
-            batt = float(row[self.ibatt]) if self.ibatt is not None else None
+            temp = float(row[self._itemp])
+            rh = float(row[self._irh]) if self._irh is not None and row[self._irh] else None
+            batt = float(row[self._ibatt]) if self._ibatt is not None else None
             yield ts, temp, rh, batt
 
     def unzip(self):
@@ -157,3 +162,8 @@ class HoboCSVReader(object):
         :rtype: tuple of lists (timestamps, temperatures, RHs, batts)
         """
         return zip(*[row for row in self])
+
+
+if __name__ == '__main__':
+    for row in HoboCSVReader(sys.argv[1]):
+        print(row)
