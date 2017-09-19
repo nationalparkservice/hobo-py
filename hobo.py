@@ -111,8 +111,9 @@ class HoboCSVReader(object):
         except Exception as e:
             self.sn = ''
         self._find_columns(header)
-        
-        self.tz = TZFixedOffset(TZ_REGEX.search(header).group())
+
+        tz_match = TZ_REGEX.search(header)
+        self.tz = TZFixedOffset(tz_match.group()) if tz_match else None
         self.as_timezone = TZFixedOffset(as_timezone) if type(as_timezone) in (int, float, str) else as_timezone
         
         if 'Temp' not in header:
@@ -121,7 +122,7 @@ class HoboCSVReader(object):
         self.reader = csv.reader(self._f, strict=strict)
 
     def _find_columns(self, header):
-        """Return integer index for (timestamp, temp, RH, battery)"""
+        """Find and set integer index for (timestamp, temp, RH, battery) as private ivars"""
         self._itimestamp, self._itemp, self._irh, self._ibatt = None, None, None, None
         headers = next(csv.reader(StringIO(header)))
         for i, header in enumerate(headers):
@@ -165,5 +166,7 @@ class HoboCSVReader(object):
 
 
 if __name__ == '__main__':
-    for row in HoboCSVReader(sys.argv[1]):
-        print(row)
+    if len(sys.argv) > 1:
+        reader = HoboCSVReader(sys.argv[1])
+        for row in reader:
+            print(row)
