@@ -23,7 +23,7 @@ except ImportError:
     from io import StringIO
 
 
-__version__ = '0.0.1'
+__version__ = '0.0.2-dev'
 
 __all__ = 'HoboCSVReader',
 
@@ -90,7 +90,8 @@ class HoboCSVReader(object):
     :param tzinfo as_timezone: explicit timezone to cast timestamps to
     :param bool strict: whether we should be strict or lenient in parsing CSV
 
-    :raises Exception: if this doesn't appear to be a HoboWare exported CSV
+    :raises Exception: if this doesn't appear to be a HOBOware or BoxCar exported CSV
+    :raises ValueError: if required columns representing timestamp or temperature can't be located
 
     :ivar str fname:
     :ivar str title:
@@ -104,36 +105,57 @@ class HoboCSVReader(object):
         self.fname = fname
         self._f = open(fname, 'rt')
 
-        self.title = next(self._f)   # line 1: plot title
-        header = next(self._f)  # line 2: headers
+        self.title = next(self._f)  # line 1: plot title
+        header = next(self._f)      # line 2: headers
         try:
             self.sn = SN_REGEX.findall(header)[0]
         except Exception as e:
             self.sn = ''
+
+        self._itimestamp, self._itemp, self._irh, self._ibatt = None, None, None, None
         self._find_columns(header)
+        if self._itimestamp is None:
+            raise ValueError('Unable to find required timestamp column!')
+        if self._itemp is None:
+            raise ValueError('Unable to find required temperature column!')
 
         tz_match = TZ_REGEX.search(header)
         self.tz = TZFixedOffset(tz_match.group()) if tz_match else None
         self.as_timezone = TZFixedOffset(as_timezone) if type(as_timezone) in (int, float, str) else as_timezone
         
-        if 'Temp' not in header:
-            raise ValueError('File %s does not contain Temperature data.' % fname)
-
         self.reader = csv.reader(self._f, strict=strict)
+
+    def _find_col_timestamp(self, headers):
+        for i, header in enumerate(headers):
+            if 'Date Time' in header:
+                return i
+
+    def _find_col_temperature(self, headers):
+        for i, header in enumerate(headers):
+            if 'High Res. Temp.' in header or 'High-Res Temp' in header:
+                return i
+        for i, header in enumerate(headers):
+            for s in ('Temp,', 'Temp.', 'Temperature'):
+                if s in header:
+                    return i
+
+    def _find_col_rh(self, headers):
+        for i, header in enumerate(headers):
+            if 'RH, %' in header:
+                return i
+
+    def _find_col_battery(self, headers):
+        for i, header in enumerate(headers):
+            if 'Batt, V' in header:
+                return i
 
     def _find_columns(self, header):
         """Find and set integer index for (timestamp, temp, RH, battery) as private ivars"""
-        self._itimestamp, self._itemp, self._irh, self._ibatt = None, None, None, None
         headers = next(csv.reader(StringIO(header)))
-        for i, header in enumerate(headers):
-            if 'Date Time' in header:
-                self._itimestamp = i
-            elif 'Temp,' in header or 'High Res. Temp.' in header:
-                self._itemp = i
-            elif 'RH, %' in header:
-                self._irh = i
-            elif 'Batt, V' in header:
-                self._ibatt = i
+        self._itimestamp = self._find_col_timestamp(headers)
+        self._itemp = self._find_col_temperature(headers)
+        self._irh = self._find_col_rh(headers)
+        self._ibatt = self._find_col_battery(headers)
 
     def __iter__(self):
         """
