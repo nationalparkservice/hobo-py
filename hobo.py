@@ -99,8 +99,7 @@ class HoboCSVReader(object):
     :ivar tzinfo tz:
     :ivar tzinfo as_timezone:
     """
-    # TODO: extract timezone from title row
-    
+
     def __init__(self, fname, as_timezone=None, strict=True):
         self.fname = fname
         self._f = open(fname, 'rt')
@@ -123,7 +122,7 @@ class HoboCSVReader(object):
         self.tz = TZFixedOffset(tz_match.group()) if tz_match else None
         self.as_timezone = TZFixedOffset(as_timezone) if type(as_timezone) in (int, float, str) else as_timezone
         
-        self.reader = csv.reader(self._f, strict=strict)
+        self._reader = csv.reader(self._f, strict=strict)
 
     def _find_col_timestamp(self, headers):
         for i, header in enumerate(headers):
@@ -164,7 +163,7 @@ class HoboCSVReader(object):
         :return: yields (timestamp, temperature, RH, battery)
         :rtype: tuple(datetime, float, float, float)
         """
-        for row in self.reader:
+        for row in self._reader:
             if not row[self._itemp]:  # is this too lenient?
                 continue  # skip event-only rows
             if not row[0].strip():
@@ -186,9 +185,17 @@ class HoboCSVReader(object):
         """
         return zip(*[row for row in self])
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._f.close()
+
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        reader = HoboCSVReader(sys.argv[1])
+    if len(sys.argv) < 2:
+        print('usage: %s CSVFILE' % sys.argv[0], file=sys.stderr)
+        sys.exit(2)
+    with HoboCSVReader(sys.argv[1]) as reader:
         for row in reader:
             print(row)
