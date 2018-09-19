@@ -157,7 +157,7 @@ class HoboCSVReader(object):
                 self.title = header
             if self.sn is None:
                 sn_match = SN_REGEX.search(header)
-                self.sn = sn_match.group() if sn_match else None
+                self.sn = sn_match.groups()[0] if sn_match else None
             self._find_columns(header)
         return header
 
