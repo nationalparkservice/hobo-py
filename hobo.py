@@ -30,12 +30,13 @@ __all__ = 'HoboCSVReader',
 
 TIME_FMTS = [
     '%m/%d/%y %I:%M:%S %p',  # Hoboware export
+    '%Y-%m-%d %H:%M:%S',     # HOBO MX2301
     '%m/%d/%Y %H:%M'         # Excel edit and save (*thanks* Microsoft)
 ]
 
 
 TZ_REGEX = re.compile('GMT[-+]\d\d:\d\d')
-SN_REGEX = re.compile('LGR S/N: (\d+)')
+SN_REGEX = re.compile('(?:LGR S/N: |Serial Number:)(\d+)')
 
 
 class TZFixedOffset(tzinfo):
@@ -104,15 +105,8 @@ class HoboCSVReader(object):
         self.fname = fname
         self._f = open(fname, 'rt')
 
-        self.title = next(self._f)  # line 1: plot title
-        header = next(self._f)      # line 2: headers
-        try:
-            self.sn = SN_REGEX.findall(header)[0]
-        except Exception as e:
-            self.sn = ''
-
-        self._itimestamp, self._itemp, self._irh, self._ibatt = None, None, None, None
-        self._find_columns(header)
+        self._itimestamp, self._itemp, self._irh, self._ibatt, self.title, self.sn = None, None, None, None, None, None
+        header = self._find_headers()
         if self._itimestamp is None:
             raise ValueError('Unable to find required timestamp column!')
         if self._itemp is None:
@@ -140,7 +134,7 @@ class HoboCSVReader(object):
 
     def _find_col_rh(self, headers):
         for i, header in enumerate(headers):
-            if 'RH, %' in header:
+            if 'RH,' in header:
                 return i
 
     def _find_col_battery(self, headers):
@@ -156,6 +150,17 @@ class HoboCSVReader(object):
         self._irh = self._find_col_rh(headers)
         self._ibatt = self._find_col_battery(headers)
 
+    def _find_headers(self):
+        while self._itimestamp is None:
+            header = next(self._f)
+            if self.title is None:
+                self.title = header
+            if self.sn is None:
+                sn_match = SN_REGEX.search(header)
+                self.sn = sn_match.groups()[0] if sn_match else None
+            self._find_columns(header)
+        return header
+
     def __iter__(self):
         """
         Iterator for accessing the actual CSV rows.
@@ -164,7 +169,7 @@ class HoboCSVReader(object):
         :rtype: tuple(datetime, float, float, float)
         """
         for row in self._reader:
-            if not row[self._itemp]:  # is this too lenient?
+            if not row[self._itemp].strip():  # is this too lenient?
                 continue  # skip event-only rows
             if not row[0].strip():
                 continue  # skip blank rows
