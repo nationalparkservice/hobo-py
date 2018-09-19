@@ -67,6 +67,9 @@ class TZFixedOffset(tzinfo):
     def __str__(self):
         return 'GMT%+03d:00' % self.offset_hrs
 
+    def __eq__(self, other):
+        return self.offset == other.offset
+
     def __repr__(self):
         return str(self)
 
@@ -154,7 +157,7 @@ class HoboCSVReader(object):
         while self._itimestamp is None:
             header = next(self._f)
             if self.title is None:
-                self.title = header
+                self.title = header.strip()  # TODO: rip out "Plot Title:"
             if self.sn is None:
                 sn_match = SN_REGEX.search(header)
                 self.sn = sn_match.groups()[0] if sn_match else None

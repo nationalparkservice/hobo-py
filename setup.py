@@ -12,6 +12,7 @@ setup(
     author='David A. Riggs',
     author_email='david_a_riggs@nps.gov',
     py_modules=['hobo'],
+    test_suite='test_hobo',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',

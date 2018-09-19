@@ -1,2 +1,5 @@
 include LICENSE.md
 include README.txt
+include Makefile
+include test_data/*
+include *.py
