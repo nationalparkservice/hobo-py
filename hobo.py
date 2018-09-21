@@ -35,7 +35,7 @@ TIME_FMTS = [
 ]
 
 
-TZ_REGEX = re.compile('GMT[-+]\d\d:\d\d')
+TZ_REGEX = re.compile('GMT\s?[-+]\d\d:\d\d')
 SN_REGEX = re.compile('(?:LGR S/N: |Serial Number:)(\d+)')
 
 
@@ -48,9 +48,9 @@ class TZFixedOffset(tzinfo):
         if type(offset) in (int, float):
             self.offset_hrs = offset
         elif type(offset) == str:
-            if len(offset) != 9 or offset[:3] != 'GMT' or offset[7:] != '00':
+            if not TZ_REGEX.match(offset) or offset[-2:] != '00':
                 raise ValueError(offset)
-            self.offset_hrs = int(offset[3:6])
+            self.offset_hrs = int(offset[-6:-3])  # extract whole hour and sign
         else:
             raise ValueError(offset)
         self.offset = timedelta(hours=self.offset_hrs)
@@ -68,7 +68,7 @@ class TZFixedOffset(tzinfo):
         return 'GMT%+03d:00' % self.offset_hrs
 
     def __eq__(self, other):
-        return self.offset == other.offset
+        return other is not None and self.offset == other.offset
 
     def __repr__(self):
         return str(self)
